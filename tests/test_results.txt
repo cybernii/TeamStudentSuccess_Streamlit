@@ -1,0 +1,34 @@
+
+=======================================================
+  INTEGRATION TEST SUITE - AIE1014 Assignment 03
+  Student: Onyekachi Odunze
+=======================================================
+
+Test 1: API health check
+  ✅ API is healthy and model is loaded
+
+Test 2: Valid prediction (happy path)
+  ✅ Prediction: 1 | Risk: high | Confidence: 100.0%
+
+Test 3: Minimum boundary values
+  ✅ Minimum values accepted
+
+Test 4: Maximum boundary values
+  ✅ Maximum values accepted
+
+Test 5: Missing required field (avg_score omitted)
+  ✅ Missing field rejected with status 422
+
+Test 6: Empty request body
+  ✅ Empty request rejected with status 422
+
+Test 7: Wrong data type (string where float expected)
+  ✅ Wrong type rejected with status 422
+
+Test 8: Response time under 5 seconds
+  ✅ Response time: 2.080s
+
+=======================================================
+  RESULTS: 8 passed  |  0 failed
+=======================================================
+
