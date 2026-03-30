@@ -1,1 +1,4 @@
-from ui.app_ui import *  # noqa: F401,F403
+from ui.app_ui import main
+
+
+main()
