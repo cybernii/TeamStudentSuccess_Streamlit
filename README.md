@@ -200,7 +200,6 @@ RESULTS: 9 passed | 0 failed
 - No persistent database — predictions reset on server restart
 - Single-user session — no multi-user authentication
 - OULAD module codes only — real college data requires column remapping
-- `api/model.pkl` was serialized with a newer scikit-learn version than the pinned runtime dependency, so deployment logs may show a model compatibility warning until the artifact is re-exported with the pinned version
 
 ---
 
