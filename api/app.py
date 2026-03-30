@@ -3,38 +3,18 @@ Assignment 03 — Standalone FastAPI server for Student Risk Prediction
 AIE1014 | Onyekachi Odunze
 """
 
-import joblib
-import pandas as pd
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from shared.prediction import MODEL_FEATURES, load_model, predict_payload
 
 # ── Load model on startup ──────────────────────────────────────────────────────
 MODEL_PATH = Path(__file__).parent / "model.pkl"
 model = None
 
-# Exact 44 feature columns the RandomForest was trained on (Assignment 02)
-MODEL_FEATURES = [
-    "num_of_prev_attempts", "studied_credits", "avg_score", "total_clicks",
-    "completion_rate", "is_repeat_student", "engagement_score", "credits_per_attempt",
-    "gender_m",
-    "code_module_bbb", "code_module_ccc", "code_module_ddd",
-    "code_module_eee", "code_module_fff", "code_module_ggg",
-    "region_east midlands region", "region_ireland", "region_london region",
-    "region_north region", "region_north western region", "region_scotland",
-    "region_south east region", "region_south region", "region_south west region",
-    "region_wales", "region_west midlands region", "region_yorkshire region",
-    "highest_education_he qualification", "highest_education_lower than a level",
-    "highest_education_no formal quals", "highest_education_post graduate qualification",
-    "imd_band_10-20%", "imd_band_20-30%", "imd_band_30-40%", "imd_band_40-50%",
-    "imd_band_50-60%", "imd_band_60-70%", "imd_band_70-80%", "imd_band_80-90%",
-    "imd_band_90-100%", "imd_band_unknown",
-    "age_band_35-55", "age_band_55<=", "disability_y",
-]
-
 try:
-    model = joblib.load(MODEL_PATH)
+    model = load_model()
     print(f"[OK] Model loaded from {MODEL_PATH}")
 except Exception as e:
     print(f"[WARN] Could not load model: {e}")
@@ -97,67 +77,6 @@ class PredictionResponse(BaseModel):
     probability_at_risk: float = Field(description="Raw probability of being at risk")
 
 
-# ── Feature engineering (mirrors Assignment 02 Stage 4 pipeline) ──────────────
-def build_feature_vector(s: StudentFeatures) -> pd.DataFrame:
-    """Convert StudentFeatures into the 44-column vector the model expects."""
-
-    # Start with all zeros — fills any one-hot columns not set
-    row = {f: 0 for f in MODEL_FEATURES}
-
-    # Raw numeric features
-    row["avg_score"] = s.avg_score
-    row["completion_rate"] = min(s.completion_rate, 1.0)  # clip outliers (max was 5.0 in raw data)
-    row["total_clicks"] = s.total_clicks
-    row["studied_credits"] = s.studied_credits
-    row["num_of_prev_attempts"] = s.num_of_prev_attempts
-
-    # Engineered features — same formulas used in Assignment 02 Stage 4
-    row["is_repeat_student"] = int(s.num_of_prev_attempts > 0)
-    row["engagement_score"] = s.avg_score * min(s.completion_rate, 1.0)
-    row["credits_per_attempt"] = s.studied_credits / (s.num_of_prev_attempts + 1)
-
-    # Gender one-hot (baseline = F, drop_first=True)
-    row["gender_m"] = int(s.gender.strip().upper() == "M")
-
-    # Module one-hot (baseline = AAA, drop_first=True)
-    for mod in ["BBB", "CCC", "DDD", "EEE", "FFF", "GGG"]:
-        key = f"code_module_{mod.lower()}"
-        if key in row:
-            row[key] = int(getattr(s, f"module_{mod}", False))
-
-    # Region one-hot
-    region_key = f"region_{s.region.strip().lower()}"
-    if region_key in row:
-        row[region_key] = 1
-
-    # Highest education one-hot (baseline = A Level or Equivalent)
-    edu_map = {
-        "he qualification": "highest_education_he qualification",
-        "lower than a level": "highest_education_lower than a level",
-        "no formal quals": "highest_education_no formal quals",
-        "post graduate qualification": "highest_education_post graduate qualification",
-    }
-    edu_key = edu_map.get(s.highest_education.strip().lower())
-    if edu_key and edu_key in row:
-        row[edu_key] = 1
-
-    # IMD band one-hot
-    imd_key = f"imd_band_{s.imd_band.strip().lower()}"
-    if imd_key in row:
-        row[imd_key] = 1
-
-    # Age band one-hot (baseline = 0-35)
-    age_map = {"35-55": "age_band_35-55", "55<=": "age_band_55<="}
-    age_key = age_map.get(s.age_band.strip())
-    if age_key and age_key in row:
-        row[age_key] = 1
-
-    # Disability one-hot (baseline = N)
-    row["disability_y"] = int(s.disability.strip().upper() == "Y")
-
-    return pd.DataFrame([row])[MODEL_FEATURES]
-
-
 # ── FastAPI app ────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="Student Risk Prediction API",
@@ -201,24 +120,7 @@ def predict(student: StudentFeatures):
         raise HTTPException(status_code=503, detail="Model not loaded. Ensure api/model.pkl exists.")
 
     try:
-        X = build_feature_vector(student)
-        pred = int(model.predict(X)[0])
-        proba = float(model.predict_proba(X)[0][1])
-        confidence = float(max(model.predict_proba(X)[0]))
-
-        # Translate probability into a human-readable risk tier
-        if proba < 0.35:
-            risk_level = "low"
-        elif proba < 0.65:
-            risk_level = "medium"
-        else:
-            risk_level = "high"
-
-        return PredictionResponse(
-            prediction=pred,
-            risk_level=risk_level,
-            confidence=confidence,
-            probability_at_risk=proba,
-        )
+        result = predict_payload(student.model_dump(), model=model)
+        return PredictionResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")

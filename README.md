@@ -8,7 +8,7 @@
 
 ## Overview
 
-This system helps academic advisors identify students at risk of failing or withdrawing — and prescribes exactly what to do about it. It combines an XGBoost machine learning model trained on behavioural engagement data with a hybrid intervention engine (rule-based logic enhanced by a Large Language Model) to generate specific, prioritised recommendations for each student. The system is designed for Cambrian College advisors who need to act faster and more precisely than manual review allows.
+This system helps academic advisors identify students at risk of failing or withdrawing — and prescribes exactly what to do about it. It combines a RandomForest machine learning model trained on behavioural engagement data with a hybrid intervention engine (rule-based logic enhanced by a Large Language Model) to generate specific, prioritised recommendations for each student. The system is designed for Cambrian College advisors who need to act faster and more precisely than manual review allows.
 
 | | |
 |---|---|
@@ -37,16 +37,21 @@ TeamStudentSuccess_Milestone4/
 │   ├── app.py              # FastAPI backend (predict, health, info)
 │   ├── model.pkl           # Trained RandomForest model
 │   └── requirements.txt    # API dependencies
+├── shared/
+│   └── prediction.py       # Shared feature engineering + prediction logic
+├── streamlit_app.py        # Streamlit Cloud entrypoint
 ├── ui/
 │   ├── app_ui.py           # Streamlit UI
 │   └── requirements.txt    # UI dependencies
 ├── tests/
-│   ├── test_integration.py # Integration test suite (8 tests)
-│   └── test_results.txt    # Latest test run results (8/8 pass)
+│   ├── test_integration.py # FastAPI integration tests
+│   └── test_results.txt    # Legacy saved test output
 ├── docs/
 │   └── TeamStudentSuccess_Milestone4_Report.pdf
 ├── README.md
-└── requirements.txt        # Combined dependencies
+├── requirements-dev.txt    # Full local dev/test dependencies
+├── requirements.txt        # Streamlit Cloud dependencies
+└── runtime.txt             # Python runtime for Streamlit Cloud
 ```
 
 ---
@@ -54,13 +59,13 @@ TeamStudentSuccess_Milestone4/
 ## Quick Start
 
 ### Prerequisites
-- Python 3.11 or higher
+- Python 3.12
 - pip
 
-### 1 — Install dependencies
+### 1 — Install local development dependencies
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 ### 2 — Start the API
@@ -76,7 +81,7 @@ Swagger docs at `http://localhost:8000/docs`
 ### 3 — Start the Streamlit UI (new terminal)
 
 ```bash
-streamlit run ui/app_ui.py
+streamlit run streamlit_app.py
 ```
 
 UI will open at `http://localhost:8501`
@@ -84,10 +89,25 @@ UI will open at `http://localhost:8501`
 ### 4 — Run integration tests (new terminal)
 
 ```bash
-python tests/test_integration.py
+.venv/bin/python -m pytest tests/test_integration.py -q
 ```
 
-Expected: **8 passed | 0 failed**
+Expected: **9 passed | 0 failed**
+
+---
+
+## Deploy To Streamlit Cloud
+
+1. Push this repository to GitHub.
+2. In Streamlit Community Cloud, create a new app from that repo.
+3. Set the main file path to `streamlit_app.py`.
+4. Leave the default install step alone; Streamlit Cloud will use the root `requirements.txt`.
+5. Deploy.
+
+Why this repo is set up this way:
+- `requirements.txt` contains only the packages needed by the Streamlit app.
+- `requirements-dev.txt` keeps FastAPI and test dependencies for local development.
+- `runtime.txt` pins Python 3.12, which matches the environment used for local verification.
 
 ---
 
@@ -108,7 +128,18 @@ Expected: **8 passed | 0 failed**
   "total_clicks": 150,
   "studied_credits": 60,
   "num_of_prev_attempts": 0,
-  "module": "BBB"
+  "module_BBB": true,
+  "module_CCC": false,
+  "module_DDD": false,
+  "module_EEE": false,
+  "module_FFF": false,
+  "module_GGG": false,
+  "gender": "M",
+  "region": "South East Region",
+  "highest_education": "A Level or Equivalent",
+  "imd_band": "50-60%",
+  "age_band": "0-35",
+  "disability": "N"
 }
 ```
 
@@ -119,7 +150,7 @@ Expected: **8 passed | 0 failed**
   "prediction": 1,
   "risk_level": "high",
   "confidence": 0.96,
-  "probability": 0.96
+  "probability_at_risk": 0.96
 }
 ```
 
@@ -156,9 +187,10 @@ Test 4: Maximum boundary values       ✅ PASS
 Test 5: Missing required field        ✅ PASS (422 returned)
 Test 6: Empty request body            ✅ PASS (422 returned)
 Test 7: Wrong data type               ✅ PASS (422 returned)
-Test 8: Response time < 5s            ✅ PASS (~2s)
+Test 8: Wrong data type (`null`)      ✅ PASS (422 returned)
+Test 9: Response time < 5s            ✅ PASS (~2s)
 
-RESULTS: 8 passed | 0 failed
+RESULTS: 9 passed | 0 failed
 ```
 
 ---
@@ -168,6 +200,7 @@ RESULTS: 8 passed | 0 failed
 - No persistent database — predictions reset on server restart
 - Single-user session — no multi-user authentication
 - OULAD module codes only — real college data requires column remapping
+- `api/model.pkl` was serialized with a newer scikit-learn version than the pinned runtime dependency, so deployment logs may show a model compatibility warning until the artifact is re-exported with the pinned version
 
 ---
 

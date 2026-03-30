@@ -1,0 +1,4 @@
+-r api/requirements.txt
+-r ui/requirements.txt
+requests==2.32.3
+pytest==8.3.3
